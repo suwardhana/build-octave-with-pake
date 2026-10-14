@@ -1,0 +1,45 @@
+/* Octave Music — macOS native tweaks (hideTitleBar:true).
+ * 1. Cegah flash putih saat launch.
+ * 2. Kasih ruang aman buat traffic lights (close/minimize/zoom) di kiri atas.
+ * 3. Font smoothing + scrollbar dark ala Spotify.
+ */
+
+html,
+body {
+  background: #0a0a0a !important;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Area yang di-mark sebagai drag region oleh octave-native.js */
+[data-tauri-drag-region] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Jangan sampai logo / header bisa di-select pas di-drag */
+.octave-traffic-safe {
+  padding-top: 28px !important;
+  padding-left: 12px !important;
+  box-sizing: border-box;
+}
+
+/* Scrollbar tipis gelap */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 8px;
+  border: 2px solid #0a0a0a;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}

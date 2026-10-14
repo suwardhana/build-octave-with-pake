@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/tw93/Pake/main/schema/pake.schema.json",
+  "url": "https://music.octavestreaming.com/",
+  "name": "Octave Music",
+  "identifier": "com.octave.music",
+  "icon": "./music.icns",
+  "appVersion": "1.1.0",
+  "hideTitleBar": true,
+  "hideOnClose": true,
+  "width": 1280,
+  "height": 800,
+  "minWidth": 800,
+  "minHeight": 600,
+  "darkMode": true,
+  "disabledWebShortcuts": true,
+  "inject": [
+    "./octave-native.css",
+    "./octave-native.js",
+    "./octave-media.js",
+    "./octave-cache.js",
+    "./octave-prefetch.js",
+    "./octave-media-lazy.js",
+    "./disable-right-click.js"
+  ]
+}
