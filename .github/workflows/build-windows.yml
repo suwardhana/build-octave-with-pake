@@ -1,0 +1,163 @@
+name: Build Windows
+
+# Build .exe/.msi Octave Music lewat Pake CLI (npm) — TANPA fork repo tw93/Pake.
+# Semua konfigurasi app ada di app.json di repo ini.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish hasil build ke GitHub Releases"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PAKE_CLI_VERSION: "3.17.6"
+  # Bikin cargo target dir stabil & gampang di-cache.
+  CARGO_TARGET_DIR: ${{ github.workspace }}/.pake-target
+  APP_NAME: "Octave Music"
+
+jobs:
+  build-windows:
+    name: Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Rust (MSVC)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_TARGET_DIR }}
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-pake-${{ runner.os }}-${{ env.PAKE_CLI_VERSION }}-${{ hashFiles('app.json', 'src/**', 'assets/icon.ico') }}
+          restore-keys: |
+            cargo-pake-${{ runner.os }}-${{ env.PAKE_CLI_VERSION }}-
+            cargo-pake-${{ runner.os }}-
+
+      - name: Install Pake CLI
+        shell: pwsh
+        run: |
+          npm install -g pake-cli@$env:PAKE_CLI_VERSION
+          pake --version
+
+      - name: Validate app.json
+        id: meta
+        shell: pwsh
+        run: |
+          $cfg = Get-Content app.json -Raw | ConvertFrom-Json
+
+          # Versi: tag (v1.2.3) menang kalau dipicu push tag, selain itu app.json.
+          $version = $cfg.appVersion
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF -replace '^refs/tags/v', ''
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+          # fail fast kalau file inject / aset hilang (jangan sampai ketahuan di menit ke-10)
+          $missing = @()
+          foreach ($f in $cfg.inject) { if (-not (Test-Path $f)) { $missing += $f } }
+          foreach ($f in @($cfg.icon, $cfg.systemTrayIcon, "assets/icon.ico")) {
+            if ($f -and -not (Test-Path $f)) { $missing += $f }
+          }
+          if ($missing.Count -gt 0) {
+            throw "File yang direferensikan app.json tidak ada: $($missing -join ', ')"
+          }
+
+          Write-Host "version = $version"
+          Write-Host "inject files = $($cfg.inject.Count)"
+
+      - name: Build with Pake CLI
+        shell: pwsh
+        run: |
+          # --config        : ambil url/name/width/inject dll dari app.json
+          # --icon .ico    : Windows wajib .ico 256x256 (kalau tidak, Pake jatuh ke ikon default)
+          # --keep-binary  : simpan juga raw .exe portable, bukan cuma installer .msi
+          pake --config app.json --icon ./assets/icon.ico --keep-binary
+
+      - name: Collect artifacts
+        id: collect
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.meta.outputs.version }}"
+          $exe = "$env:APP_NAME.exe"
+          $msi = "$env:APP_NAME.msi"
+
+          if (-not (Test-Path $exe)) { throw "Raw binary tidak ditemukan: $exe" }
+          if (-not (Test-Path $msi)) { throw "Installer MSI tidak ditemukan: $msi" }
+
+          $outExe = "Octave-Music-$ver-windows-x64-portable.exe"
+          $outMsi = "Octave-Music-$ver-windows-x64.msi"
+
+          Copy-Item $exe $outExe
+          Copy-Item $msi $outMsi
+
+          # checksum biar bisa diverifikasi setelah download
+          $lines = Get-ChildItem $outExe, $outMsi |
+            ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.Name -Algorithm SHA256).Hash.ToLower(), $_.Name }
+          $lines | Set-Content SHA256SUMS.txt -Encoding ascii
+
+          Get-ChildItem $outExe, $outMsi, "SHA256SUMS.txt" | Select-Object Name, Length | Format-Table
+
+          "exe=$outExe" >> $env:GITHUB_OUTPUT
+          "msi=$outMsi" >> $env:GITHUB_OUTPUT
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: octave-music-windows-x64-${{ steps.meta.outputs.version }}
+          path: |
+            ${{ steps.collect.outputs.exe }}
+            ${{ steps.collect.outputs.msi }}
+            SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish to Releases
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}
+          name: Octave Music v${{ steps.meta.outputs.version }}
+          fail_on_unmatched_files: true
+          files: |
+            ${{ steps.collect.outputs.exe }}
+            ${{ steps.collect.outputs.msi }}
+            SHA256SUMS.txt
+          body: |
+            Build otomatis Pake CLI `${{ env.PAKE_CLI_VERSION }}` untuk Windows x64.
+
+            **Pilih salah satu:**
+
+            | File | Keterangan |
+            | --- | --- |
+            | `${{ steps.collect.outputs.exe }}` | Portable — tinggal jalankan, tanpa install |
+            | `${{ steps.collect.outputs.msi }}` | Installer — bikin shortcut Start Menu |
+
+            Butuh **WebView2 Runtime** (sudah ada di Windows 10 21H2+ dan Windows 11; kalau belum, ambil dari situs Microsoft).
+
+            Verifikasi unduhan dengan `SHA256SUMS.txt`.

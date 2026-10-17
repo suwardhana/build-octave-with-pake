@@ -1,0 +1,9 @@
+# build output
+dist/
+.pake-target/
+*.msi
+*.exe
+node_modules/
+
+# macOS
+.DS_Store
