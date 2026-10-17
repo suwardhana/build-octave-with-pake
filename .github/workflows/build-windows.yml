@@ -75,7 +75,8 @@ jobs:
       - name: Install Pake CLI
         shell: pwsh
         run: |
-          npm install -g pake-cli@$env:PAKE_CLI_VERSION
+          # --prefer-offline: manfaatkan cache npm yang sudah di-restore di atas
+          npm install -g pake-cli@$env:PAKE_CLI_VERSION --prefer-offline --no-audit --no-fund
           pake --version
 
       - name: Validate app.json
