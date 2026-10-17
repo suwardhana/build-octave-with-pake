@@ -23,6 +23,8 @@ concurrency:
 
 env:
   PAKE_CLI_VERSION: "3.17.6"
+  # Naikkan angka ini kalau mau memaksa cache dibuang (mis. setelah ganti toolchain).
+  CACHE_VERSION: "v1"
   # Bikin cargo target dir stabil & gampang di-cache.
   CARGO_TARGET_DIR: ${{ github.workspace }}/.pake-target
   APP_NAME: "Octave Music"
@@ -47,14 +49,25 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Cache cargo
+      # Path cache npm beda per OS (Windows: %LOCALAPPDATA%\npm-cache), jadi
+      # ditanya ke npm dulu, jangan di-hardcode.
+      - name: Resolve cache paths
+        id: paths
+        shell: pwsh
+        run: '"npm_cache=$(npm config get cache)" >> $env:GITHUB_OUTPUT'
+
+      # Key sengaja TIDAK mem-hash src/, supaya edit JS nggak membuang cache
+      # 500MB+ dan memaksa compile Rust dari nol. Perubahan isi inject tetap
+      # terdeteksi cargo lewat fingerprint, jadi cuma crate app yang rebuild.
+      - name: Cache cargo + npm
         uses: actions/cache@v4
         with:
           path: |
             ${{ env.CARGO_TARGET_DIR }}
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-pake-${{ runner.os }}-${{ env.PAKE_CLI_VERSION }}-${{ hashFiles('app.json', 'src/**', 'assets/icon.ico') }}
+            ${{ steps.paths.outputs.npm_cache }}
+          key: cargo-pake-${{ runner.os }}-${{ env.PAKE_CLI_VERSION }}-${{ env.CACHE_VERSION }}
           restore-keys: |
             cargo-pake-${{ runner.os }}-${{ env.PAKE_CLI_VERSION }}-
             cargo-pake-${{ runner.os }}-
