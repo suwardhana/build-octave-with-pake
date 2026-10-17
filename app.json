@@ -3,10 +3,12 @@
   "url": "https://music.octavestreaming.com/",
   "name": "Octave Music",
   "identifier": "com.octave.music",
-  "icon": "./music.icns",
-  "appVersion": "1.1.0",
+  "icon": "./assets/music.icns",
+  "appVersion": "1.1.1",
   "hideTitleBar": true,
   "hideOnClose": true,
+  "showSystemTray": true,
+  "systemTrayIcon": "./assets/tray-icon-128.png",
   "width": 1280,
   "height": 800,
   "minWidth": 800,
@@ -14,12 +16,14 @@
   "darkMode": true,
   "disabledWebShortcuts": true,
   "inject": [
-    "./octave-native.css",
-    "./octave-native.js",
-    "./octave-media.js",
-    "./octave-cache.js",
-    "./octave-prefetch.js",
-    "./octave-media-lazy.js",
-    "./disable-right-click.js"
+    "./src/css/octave-native.css",
+    "./src/js/octave-volume.js",
+    "./src/js/octave-native.js",
+    "./src/js/octave-media.js",
+    "./src/js/octave-cache.js",
+    "./src/js/octave-prefetch.js",
+    "./src/js/octave-media-lazy.js",
+    "./src/js/octave-depin.js",
+    "./src/js/disable-right-click.js"
   ]
 }
