@@ -17,7 +17,6 @@
   "disabledWebShortcuts": true,
   "inject": [
     "./src/css/octave-native.css",
-    "./src/js/octave-volume.js",
     "./src/js/octave-native.js",
     "./src/js/octave-media.js",
     "./src/js/octave-cache.js",
