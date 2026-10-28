@@ -24,6 +24,7 @@
     "./src/js/octave-prefetch.js",
     "./src/js/octave-media-lazy.js",
     "./src/js/octave-depin.js",
-    "./src/js/disable-right-click.js"
+    "./src/js/disable-right-click.js",
+    "./src/js/octave-diag.js"
   ]
 }
