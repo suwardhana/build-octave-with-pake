@@ -1,72 +1,149 @@
-// Octave Music — macOS native: drag window + geser logo dari traffic lights.
-// Bekerja tanpa bergantung pada class hash Next.js: cari logo via img[src*="logo"].
+// Octave Music — octave-native.js
+// macOS: drag window + geser logo dari traffic lights.
+// Semua kerja dipicu octave-core (route / mutation batch), bukan observer sendiri.
+// Di Windows/Linux modul ini no-op: title bar native tidak butuh padding traffic lights.
 
-const TRAFFIC_TOP_PAD = '30px';
-const TRAFFIC_LEFT_PAD = '12px';
-const INTERACTIVE_SEL = 'a, button, input, textarea, select, [contenteditable="true"], [role="button"], [role="row"], audio, video';
+(function () {
+  'use strict';
 
-function markDraggable(el) {
-  if (!el || el.nodeType !== 1) return;
-  el.setAttribute('data-tauri-drag-region', '');
-  // Tauri butuh atribut di elemen paling dalam yang diklik,
-  // jadi turunkan ke anak non-interaktif juga.
-  Array.from(el.querySelectorAll('*')).forEach((child) => {
-    if (child.closest(INTERACTIVE_SEL)) return;
-    child.setAttribute('data-tauri-drag-region', '');
-  });
-}
+  if (window.__octaveNative) return;
+  window.__octaveNative = true;
 
-function fixLogoSpacing() {
-  // Logo Octave: img /brand/white_logo.png di dalam <a href="/">
-  const logos = document.querySelectorAll('img[src*="white_logo"], img[src*="logo"], img[alt*="ctave" i]');
-  logos.forEach((img) => {
-    // Naik 1-3 level untuk dapat container header/sidebar, bukan img-nya langsung
-    // (kalau img-nya yang di-padding, ukurannya ikut berubah).
-    const container =
-      img.closest('header') ||
-      img.closest('nav') ||
-      img.closest('aside') ||
-      img.parentElement?.parentElement ||
-      img.parentElement;
-    if (!container || container.dataset.octaveSafe === '1') return;
-    container.dataset.octaveSafe = '1';
-    container.classList.add('octave-traffic-safe');
-    // Inline style sebagai fallback kalau CSS inject telat / kalah specificity
-    if (!container.style.paddingTop) container.style.paddingTop = TRAFFIC_TOP_PAD;
-    if (!container.style.paddingLeft) container.style.paddingLeft = TRAFFIC_LEFT_PAD;
-  });
-}
-
-function makeDragRegions() {
-  // Kandidat drag: header / nav / aside paling atas. Ambil yang menempel ke atas layar.
-  const candidates = Array.from(document.querySelectorAll('header, nav, aside')).filter((el) => {
-    const r = el.getBoundingClientRect();
-    return r.top <= 48 && r.left <= 200 && r.width > 100;
-  });
-  // Fallback: kalau layout berubah total, pakai elemen paling atas yang lebar
-  if (candidates.length === 0) {
-    const bodyFirst = document.body?.firstElementChild;
-    if (bodyFirst) candidates.push(bodyFirst);
+  var octave = window.__octave;
+  if (!octave) {
+    if (window.console && console.warn) console.warn('[octave-native] octave-core belum ada');
+    return;
   }
-  candidates.slice(0, 3).forEach(markDraggable);
-}
 
-function apply() {
-  fixLogoSpacing();
-  makeDragRegions();
-}
+  var IS_MAC = /mac/i.test(
+    (navigator.userAgentData && navigator.userAgentData.platform) ||
+      navigator.platform ||
+      navigator.userAgent ||
+      ''
+  );
+  var TRAFFIC_TOP_PAD = '30px';
+  var TRAFFIC_LEFT_PAD = '12px';
+  var INTERACTIVE_SEL =
+    'a, button, input, textarea, select, [contenteditable="true"], [role="button"], [role="row"], audio, video';
 
-let debounce;
-function schedule() {
-  clearTimeout(debounce);
-  debounce = setTimeout(apply, 150);
-}
+  var marked = new WeakSet();
+  var safeContainers = new WeakSet();
+  var markedCount = 0;
 
-apply();
-document.addEventListener('DOMContentLoaded', apply);
-window.addEventListener('load', apply);
-// Octave adalah SPA (Next.js): amati navigasi client-side lalu apply ulang
-new MutationObserver(schedule).observe(document.documentElement, {
-  childList: true,
-  subtree: true,
-});
+  function mark(el) {
+    if (!el || el.nodeType !== 1 || marked.has(el)) return;
+    marked.add(el);
+    markedCount += 1;
+    if (!el.hasAttribute('data-tauri-drag-region')) {
+      el.setAttribute('data-tauri-drag-region', '');
+    }
+  }
+
+  function markTree(root) {
+    if (!root) return;
+    mark(root);
+    var all = root.querySelectorAll('*');
+    for (var i = 0; i < all.length; i++) {
+      var child = all[i];
+      if (marked.has(child)) continue;
+      // Elemen interaktif (dan turunannya) jangan dijadikan drag handle.
+      if (child.closest && child.closest(INTERACTIVE_SEL)) {
+        marked.add(child);
+        continue;
+      }
+      mark(child);
+    }
+  }
+
+  function fixLogoSpacing() {
+    if (!IS_MAC) return;
+    var logos = document.querySelectorAll(
+      'img[src*="white_logo"], img[src*="logo"], img[alt*="ctave" i]'
+    );
+    for (var i = 0; i < logos.length; i++) {
+      var img = logos[i];
+      var container =
+        img.closest('header') ||
+        img.closest('nav') ||
+        img.closest('aside') ||
+        (img.parentElement && img.parentElement.parentElement) ||
+        img.parentElement;
+      if (!container || safeContainers.has(container)) continue;
+      safeContainers.add(container);
+      container.classList.add('octave-traffic-safe');
+      if (!container.style.paddingTop) container.style.paddingTop = TRAFFIC_TOP_PAD;
+      if (!container.style.paddingLeft) container.style.paddingLeft = TRAFFIC_LEFT_PAD;
+    }
+  }
+
+  function makeDragRegions() {
+    if (!IS_MAC) return;
+    var candidates = [];
+    var nodes = document.querySelectorAll('header, nav, aside');
+    for (var i = 0; i < nodes.length; i++) {
+      var rect = nodes[i].getBoundingClientRect();
+      if (rect.top <= 48 && rect.left <= 200 && rect.width > 100) {
+        candidates.push(nodes[i]);
+      }
+    }
+    // Fallback kalau layout berubah total: elemen paling atas yang lebar.
+    if (candidates.length === 0 && document.body && document.body.firstElementChild) {
+      candidates.push(document.body.firstElementChild);
+    }
+    for (var j = 0; j < candidates.length && j < 3; j++) {
+      markTree(candidates[j]);
+    }
+  }
+
+  function apply() {
+    if (!document.body) return;
+    var t0 = window.performance && performance.now ? performance.now() : Date.now();
+    fixLogoSpacing();
+    makeDragRegions();
+    var end = window.performance && performance.now ? performance.now() : Date.now();
+    octave.metric('native.apply', end - t0);
+  }
+
+  var timer = 0;
+  function schedule() {
+    if (timer) return;
+    timer = setTimeout(function () {
+      timer = 0;
+      apply();
+    }, 100);
+  }
+
+  octave.onRoute(function () {
+    schedule();
+  });
+
+  octave.onMutations(function (batch) {
+    if (batch.full) {
+      schedule();
+      return;
+    }
+    for (var i = 0; i < batch.records.length; i++) {
+      var added = batch.records[i].addedNodes;
+      if (added && added.length > 0) {
+        schedule();
+        return;
+      }
+    }
+  });
+
+  apply();
+  document.addEventListener('DOMContentLoaded', apply);
+  window.addEventListener('load', apply);
+
+  octave.register('native', function () {
+    return {
+      mac: IS_MAC,
+      marked: markedCount,
+      tokens: document.querySelectorAll('[data-tauri-drag-region]').length,
+    };
+  });
+
+  if (window.console && console.debug) {
+    console.debug('[octave-native] aktif (mac=' + IS_MAC + ')');
+  }
+})();
