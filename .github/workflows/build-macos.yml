@@ -1,0 +1,142 @@
+name: Build macOS
+
+# Build DMG universal (Apple Silicon + Intel) lewat Pake CLI, tanpa fork Pake.
+# Signing/notarization belum disiapkan; lihat catatan Gatekeeper di release body.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish hasil build ke GitHub Releases"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-macos-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PAKE_CLI_VERSION: "3.17.6"
+  CACHE_VERSION: "v1"
+  CARGO_TARGET_DIR: ${{ github.workspace }}/.pake-target
+  APP_NAME: "Octave Music"
+
+jobs:
+  build-macos:
+    name: macOS universal
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Check config and inject
+        run: node scripts/check.mjs
+
+      - name: Setup Rust (universal)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Intel target
+        run: rustup target add x86_64-apple-darwin
+
+      - name: Resolve npm cache
+        id: paths
+        run: echo "npm_cache=$(npm config get cache)" >> "$GITHUB_OUTPUT"
+
+      # Sama seperti Windows: key tidak mem-hash src/ supaya edit JS tidak
+      # membuang cache cargo 500MB+.
+      - name: Cache cargo + npm
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CARGO_TARGET_DIR }}
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ steps.paths.outputs.npm_cache }}
+          key: cargo-macos-${{ runner.os }}-${{ env.PAKE_CLI_VERSION }}-${{ env.CACHE_VERSION }}
+          restore-keys: |
+            cargo-macos-${{ runner.os }}-${{ env.PAKE_CLI_VERSION }}-
+            cargo-macos-${{ runner.os }}-
+
+      - name: Install Pake CLI
+        run: npm install -g pake-cli@${{ env.PAKE_CLI_VERSION }} --prefer-offline --no-audit --no-fund
+
+      - name: Validate version
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./app.json').appVersion")
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version = $VERSION"
+
+      - name: Build with Pake CLI
+        run: pake --config app.json --multi-arch
+
+      - name: Collect artifacts
+        id: collect
+        run: |
+          set -e
+          VER="${{ steps.meta.outputs.version }}"
+          DMG=$(find . -maxdepth 1 -name '*.dmg' -print -quit)
+          if [ -z "$DMG" ]; then
+            echo "DMG tidak ditemukan."
+            ls -la
+            exit 1
+          fi
+
+          OUT="Octave-Music-$VER-macos-universal.dmg"
+          cp "$DMG" "$OUT"
+          shasum -a 256 "$OUT" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          echo "dmg=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: octave-music-macos-universal-${{ steps.meta.outputs.version }}
+          path: |
+            ${{ steps.collect.outputs.dmg }}
+            SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish to Releases
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.meta.outputs.version }}
+          name: Octave Music v${{ steps.meta.outputs.version }}
+          fail_on_unmatched_files: true
+          files: |
+            ${{ steps.collect.outputs.dmg }}
+            SHA256SUMS.txt
+          body: |
+            Build otomatis Pake CLI `${{ env.PAKE_CLI_VERSION }}` untuk macOS universal
+            (Apple Silicon + Intel).
+
+            **Install:** buka DMG, drag ke Applications.
+
+            Build ini belum di-notarize. Kalau macOS menolak membuka, jalankan
+            sekali di Terminal:
+
+            ```sh
+            xattr -cr "/Applications/Octave Music.app"
+            ```
+
+            atau klik kanan app > **Open**.
+
+            Verifikasi unduhan dengan `SHA256SUMS.txt`.

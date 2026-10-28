@@ -44,6 +44,11 @@ jobs:
         with:
           node-version: "20"
 
+      # Gagal cepat kalau app.json / inject / guard modul bermasalah.
+      - name: Check config and inject
+        shell: pwsh
+        run: node scripts/check.mjs
+
       - name: Setup Rust (MSVC)
         uses: dtolnay/rust-toolchain@stable
         with:
