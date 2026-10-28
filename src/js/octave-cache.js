@@ -44,7 +44,8 @@
   // Minta persistent storage supaya tidak di-evict OS/WebView.
   try {
     if (navigator.storage && navigator.storage.persist) {
-      navigator.storage.persist();
+      var persistRequest = navigator.storage.persist();
+      if (persistRequest && persistRequest.catch) persistRequest.catch(function () {});
     }
   } catch (e) { /* abaikan */ }
 
@@ -133,12 +134,18 @@
   function rememberApi(url, res) {
     if (res.status === 204 || res.status === 205 || res.status === 304) return;
 
+    var contentType = '';
     var length = 0;
     try {
+      contentType = res.headers.get('Content-Type') || '';
       length = Number(res.headers.get('Content-Length') || 0);
     } catch (e) {
+      contentType = '';
       length = 0;
     }
+
+    // Jangan pernah buffer stream / SSE.
+    if (/event-stream|stream/i.test(contentType)) return;
     if (length > API_MAX_BODY) return;
 
     readBody(res).then(function (buf) {

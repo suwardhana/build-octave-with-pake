@@ -80,7 +80,29 @@
   }
 
   var timer = 0;
+  var scopeObserver = null;
+  var observedRoot = null;
+
+  // Observer characterData hanya untuk sidebar (bukan seluruh body).
+  // Timer/teks di player bar tidak ikut memicu sweep.
+  function ensureScopeObserver() {
+    var root = scope();
+    if (root === observedRoot) return;
+    if (scopeObserver) scopeObserver.disconnect();
+    observedRoot = root;
+    if (!root) return;
+    scopeObserver = new MutationObserver(function () {
+      schedule();
+    });
+    scopeObserver.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+  }
+
   function schedule() {
+    ensureScopeObserver();
     if (timer) return;
     timer = setTimeout(function () {
       timer = 0;

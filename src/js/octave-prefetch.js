@@ -51,7 +51,8 @@
   function nextPrefetch(path) {
     try {
       if (window.next && window.next.router && typeof window.next.router.prefetch === 'function') {
-        window.next.router.prefetch(path);
+        var result = window.next.router.prefetch(path);
+        if (result && result.catch) result.catch(function () {});
         return true;
       }
     } catch (e) {

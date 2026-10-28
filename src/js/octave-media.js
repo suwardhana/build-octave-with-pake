@@ -84,7 +84,25 @@
   }
 
   function primary() {
-    return document.querySelector('audio') || document.querySelector('video');
+    var els = document.querySelectorAll('audio, video');
+    var best = null;
+    var bestScore = -1;
+
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      var src = el.currentSrc || el.src || '';
+      var score = 0;
+      if (!el.paused) score += 4;
+      if (src) score += 2;
+      if (isFinite(el.duration) && el.duration > 0) score += 1;
+      if (/audio\/lossless/i.test(src)) score += 1;
+      if (score > bestScore) {
+        bestScore = score;
+        best = el;
+      }
+    }
+
+    return best;
   }
 
   function toggle() {

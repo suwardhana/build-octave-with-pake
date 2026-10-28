@@ -40,6 +40,25 @@ const jsFiles = readdirSync(join(root, 'src/js'))
   .filter((file) => file.endsWith('.js'))
   .sort();
 
+// Key yang dikenal schema pake-cli. Typo di sini membuat `pake --config` gagal
+// jauh di dalam build, jadi tangkap lebih awal.
+const APP_KEYS = new Set([
+  '$schema', 'url', 'name', 'identifier', 'title', 'icon', 'width', 'height',
+  'useLocalFile', 'fullscreen', 'hideTitleBar', 'hideWindowDecorations', 'multiArch',
+  'inject', 'debug', 'downloadDir', 'proxyUrl', 'basicAuth', 'userAgent', 'targets',
+  'windowsToolchain', 'appVersion', 'alwaysOnTop', 'maximize', 'darkMode',
+  'disabledWebShortcuts', 'activationShortcut', 'showSystemTray', 'systemTrayIcon',
+  'hideOnClose', 'restoreLastUrl', 'incognito', 'passwordAutosave', 'wasm',
+  'enableDragDrop', 'keepBinary', 'bundle', 'multiInstance', 'multiWindow',
+  'startToTray', 'forceInternalNavigation', 'internalUrlRegex', 'safeDomain',
+  'enableFind', 'installerLanguage', 'zoom', 'minWidth', 'minHeight',
+  'ignoreCertificateErrors', 'iterativeBuild', 'newWindow', 'install', 'camera',
+  'microphone',
+]);
+for (const key of Object.keys(app)) {
+  check(APP_KEYS.has(key), 'key app.json dikenal: ' + key);
+}
+
 check(typeof app.url === 'string' && app.url.startsWith('https://'), 'app.url valid');
 check(typeof app.name === 'string' && app.name.length > 0, 'app.name ada');
 check(typeof app.identifier === 'string' && app.identifier.length > 0, 'app.identifier ada');

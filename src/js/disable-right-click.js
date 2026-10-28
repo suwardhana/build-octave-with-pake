@@ -27,6 +27,12 @@
 
   // Kontrol contextmenu: blokir menu bawaan browser/OS kecuali elemen musik/input.
   document.addEventListener('contextmenu', function (event) {
+    // Panel diagnostik punya Shadow DOM; biarkan contextmenu di dalamnya.
+    var path = event.composedPath ? event.composedPath() : [];
+    for (var i = 0; i < path.length; i++) {
+      if (path[i] && path[i].id === 'octave-diag-host') return;
+    }
+
     var target = event.target;
     if (!target || typeof target.closest !== 'function') return;
 
